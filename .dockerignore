@@ -10,3 +10,11 @@ docs
 /web/node_modules
 /web/dist
 !THIRD-PARTY-LICENSES.md
+
+# Never send local deployment secrets, databases, or backups to a builder.
+.env
+.env.*
+!.env.example
+/data
+/logs
+/.local-tests

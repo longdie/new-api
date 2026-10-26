@@ -1,0 +1,17 @@
+[Unit]
+Description=New API production Docker Compose deployment
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=%h/new-api
+ExecStart=%h/new-api/deployment/start.sh
+ExecStop=/usr/bin/docker compose stop --timeout 60
+TimeoutStartSec=360
+TimeoutStopSec=180
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

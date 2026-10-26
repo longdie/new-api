@@ -1,0 +1,103 @@
+# Local deployment: .env selects this file through COMPOSE_FILE.
+# Start/status/logs: docker compose up -d --wait / ps / logs --tail=100
+# Upgrade deliberately: back up first, then change pinned image references.
+# Application source changes require a separate image build before deployment.
+name: new-api-prod
+
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  new-api:
+    image: ${NEW_API_IMAGE:?Set a pinned New API image in .env}
+    restart: always
+    command: ["--log-dir="]
+    ports:
+      - "127.0.0.1:${NEW_API_PORT:-3000}:3000"
+    volumes:
+      - ./data/new-api:/data
+    environment:
+      SQL_DSN: postgresql://new_api:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/new_api
+      REDIS_CONN_STRING: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379/0
+      SESSION_SECRET: ${SESSION_SECRET:?Set a persistent SESSION_SECRET}
+      CRYPTO_SECRET: ${CRYPTO_SECRET:?Set a persistent CRYPTO_SECRET}
+      TZ: Asia/Shanghai
+      DEFAULT_LANGUAGE: zh-CN
+      NODE_NAME: new-api-prod-1
+      SQL_MAX_IDLE_CONNS: "10"
+      SQL_MAX_OPEN_CONNS: "30"
+      BATCH_UPDATE_ENABLED: "false"
+      ERROR_LOG_ENABLED: "true"
+      SESSION_COOKIE_SECURE: "false"
+      TRUSTED_PROXIES: none
+      GOMAXPROCS: "2"
+      GOMEMLIMIT: 1GiB
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/status | grep -Eq '\"success\"[[:space:]]*:[[:space:]]*true'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    stop_grace_period: 60s
+    cpus: 2.0
+    mem_limit: 1536m
+    pids_limit: 256
+    security_opt: ["no-new-privileges:true"]
+    logging: *bounded-logging
+
+  postgres:
+    image: ${POSTGRES_IMAGE:?Set a pinned PostgreSQL image in .env}
+    restart: always
+    environment:
+      POSTGRES_USER: new_api
+      POSTGRES_DB: new_api
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      TZ: Asia/Shanghai
+    command: ["postgres", "-c", "max_connections=60", "-c", "shared_buffers=128MB"]
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U new_api -d new_api"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    stop_grace_period: 60s
+    cpus: 1.0
+    mem_limit: 768m
+    pids_limit: 128
+    security_opt: ["no-new-privileges:true"]
+    logging: *bounded-logging
+
+  redis:
+    image: ${REDIS_IMAGE:?Set a pinned Redis image in .env}
+    restart: always
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+      TZ: Asia/Shanghai
+    command:
+      - /bin/sh
+      - -ec
+      - exec redis-server --appendonly yes --appendfsync everysec --requirepass "$$REDIS_PASSWORD" --maxmemory 128mb --maxmemory-policy noeviction
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -qx PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    stop_grace_period: 30s
+    cpus: 0.5
+    mem_limit: 256m
+    pids_limit: 64
+    security_opt: ["no-new-privileges:true"]
+    logging: *bounded-logging

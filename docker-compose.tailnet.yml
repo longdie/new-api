@@ -1,0 +1,6 @@
+# Enable only after completing administrator initialization locally.
+# No wildcard/public interface is published. Requires Tailscale on this host.
+services:
+  new-api:
+    ports:
+      - "${TAILSCALE_IP:?Set this host's Tailscale IPv4}:${NEW_API_PORT:-3000}:3000"

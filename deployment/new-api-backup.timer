@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily New API local backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=300
+Unit=new-api-backup.service
+
+[Install]
+WantedBy=timers.target
