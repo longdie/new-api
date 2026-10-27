@@ -30,6 +30,9 @@ tiktoken_cache
 electron/node_modules
 electron/dist
 /data/
+# Local Codex authentication and converted channel credentials.
+auth.json
+new-api-credential*.json
 .gomodcache/
 .gocache-temp
 .gopath

@@ -1,6 +1,41 @@
 # Enable only after completing administrator initialization locally.
 # No wildcard/public interface is published. Requires Tailscale on this host.
 services:
+  # Bridge only this application's traffic to the host's existing loopback
+  # proxy. No host proxy configuration is changed and no public port is bound.
+  # In the Codex channel, set proxy to http://NEW_API_EGRESS_BIND:NEW_API_EGRESS_PORT.
+  codex-egress:
+    image: ${SOCAT_IMAGE:?Set a pinned socat image in .env}
+    restart: always
+    network_mode: host
+    user: "65534:65534"
+    command:
+      - "TCP4-LISTEN:${NEW_API_EGRESS_PORT:-17890},bind=${NEW_API_EGRESS_BIND:?Set the project ingress gateway},reuseaddr,fork,range=${NEW_API_BACKEND_IP:?Set NEW_API_BACKEND_IP}/32"
+      - "TCP4:127.0.0.1:${NEW_API_HOST_PROXY_PORT:-7890},connect-timeout=10"
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      new-api:
+        condition: service_healthy
+    healthcheck:
+      # socat is PID 1; a bind failure exits and triggers restart. Also check
+      # that the existing host proxy is listening, without sending credentials.
+      test: ["CMD-SHELL", "nc -z -w 2 127.0.0.1 ${NEW_API_HOST_PROXY_PORT:-7890}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 15s
+    cpus: 0.5
+    mem_limit: 64m
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
   new-api:
     ports:
       - "${TAILSCALE_IP:?Set this host's Tailscale IPv4}:${NEW_API_PORT:-3000}:3000"
