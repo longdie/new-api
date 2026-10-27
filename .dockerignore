@@ -18,3 +18,9 @@ docs
 /data
 /logs
 /.local-tests
+auth.json
+**/auth.json
+new-api-credential*.json
+**/new-api-credential*.json
+/.cache
+/.gomodcache

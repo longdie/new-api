@@ -42,15 +42,17 @@ type testResult struct {
 	newAPIError *types.NewAPIError
 }
 
-func normalizeChannelTestEndpoint(channel *model.Channel, endpointType string) string {
+func normalizeChannelTestOptions(channel *model.Channel, endpointType string, isStream bool) (string, bool) {
 	normalized := strings.TrimSpace(endpointType)
-	if normalized != "" {
-		return normalized
+	if normalized == "" && channel != nil && channel.Type == constant.ChannelTypeCodex {
+		normalized = string(constant.EndpointTypeOpenAIResponse)
 	}
-	if channel != nil && channel.Type == constant.ChannelTypeCodex {
-		return string(constant.EndpointTypeOpenAIResponse)
+	// Codex Responses requires streaming even when a manual test omits the
+	// stream option. Compaction uses a separate, non-streaming endpoint.
+	if channel != nil && channel.Type == constant.ChannelTypeCodex && normalized == string(constant.EndpointTypeOpenAIResponse) {
+		isStream = true
 	}
-	return normalized
+	return normalized, isStream
 }
 
 func resolveChannelTestUserID(c *gin.Context) (int, error) {
@@ -109,7 +111,7 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		}
 	}
 
-	endpointType = normalizeChannelTestEndpoint(channel, endpointType)
+	endpointType, isStream = normalizeChannelTestOptions(channel, endpointType, isStream)
 
 	requestPath := "/v1/chat/completions"
 

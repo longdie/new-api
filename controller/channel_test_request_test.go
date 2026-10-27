@@ -20,6 +20,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestChannelTestCodexStreamRequirement(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		channelType int
+		endpoint    string
+		stream      bool
+		wantStream  any
+	}{
+		{name: "Codex default manual test", channelType: constant.ChannelTypeCodex, wantStream: true},
+		{name: "Codex explicit Responses", channelType: constant.ChannelTypeCodex, endpoint: string(constant.EndpointTypeOpenAIResponse), wantStream: true},
+		{name: "Codex whitespace endpoint", channelType: constant.ChannelTypeCodex, endpoint: " openai-response ", wantStream: true},
+		{name: "Codex streaming test", channelType: constant.ChannelTypeCodex, stream: true, wantStream: true},
+		{name: "Codex compaction stays non-streaming", channelType: constant.ChannelTypeCodex, endpoint: string(constant.EndpointTypeOpenAIResponseCompact)},
+		{name: "OpenAI default stays non-streaming", channelType: constant.ChannelTypeOpenAI, wantStream: false},
+		{name: "OpenAI Responses stays non-streaming", channelType: constant.ChannelTypeOpenAI, endpoint: string(constant.EndpointTypeOpenAIResponse), wantStream: false},
+		{name: "OpenAI streaming stays streaming", channelType: constant.ChannelTypeOpenAI, endpoint: string(constant.EndpointTypeOpenAIResponse), stream: true, wantStream: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			channel := &model.Channel{Type: tt.channelType}
+			endpoint, stream := normalizeChannelTestOptions(channel, tt.endpoint, tt.stream)
+			request := buildTestRequest("gpt-6-astra", endpoint, channel, stream)
+			encoded, err := common.Marshal(request)
+			require.NoError(t, err)
+			var body map[string]any
+			require.NoError(t, common.Unmarshal(encoded, &body))
+			assert.Equal(t, tt.wantStream, body["stream"], "upstream request must honor the endpoint's streaming contract")
+			if tt.channelType == constant.ChannelTypeCodex && tt.wantStream != nil {
+				assert.Equal(t, string(constant.EndpointTypeOpenAIResponse), endpoint)
+				assert.IsType(t, &dto.OpenAIResponsesRequest{}, request)
+			}
+		})
+	}
+}
+
 func convertChatCompatibilityRequest(t *testing.T, request *dto.GeneralOpenAIRequest, channelType int, mapping map[string]string) []byte {
 	t.Helper()
 	oldMode := gin.Mode()
