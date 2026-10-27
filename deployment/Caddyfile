@@ -1,0 +1,19 @@
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+# Docker publishes this listener only on the host's Tailscale IPv4 port 80.
+# Caddy handles SSE flushing and WebSocket upgrades automatically. Retain
+# default request cancellation; flush_interval -1 would keep upstream work
+# running after a client disconnects.
+http://:8080 {
+	@site host {$NEW_API_HOSTNAME}
+	handle @site {
+		reverse_proxy new-api:3000
+	}
+	handle {
+		respond "Not found" 404
+	}
+}
